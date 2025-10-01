@@ -8,17 +8,17 @@ import os
 
 destination_path = '/Users/stevenhu/Desktop/vibratophysdepth/Cello/CelloPhysDepth.csv'
 
-audio_path = '/Users/stevenhu/Desktop/vibratophysdepth/Cello/Audio Recordings/mrSchumann/mrCSharp4.wav'
+audio_path = '/Users/stevenhu/Desktop/vibratophysdepth/Cello/Audio Recordings/mrSchumann/mrA4,1.wav'
 y, sr = librosa.load(audio_path, sr=44100)
 
-f_string = 165.4
+f_string = 220.5
 
 def analyze_f0_yin(
     y,
     sr,
     hop_length=16,
-    fmin=275,
-    fmax=290,
+    fmin=430,
+    fmax=455,
     savgol_window_max=201,
     savgol_polyorder=3,
     peak_distance=290,
@@ -73,6 +73,13 @@ def analyze_f0_yin(
         trend_f0s = np.interp(relevant_times, midpoints[:,0], midpoints[:,1])
         vertical_distances = np.abs(relevant_f0s - trend_f0s)
         average_distance = vertical_distances.mean()
+    # --- New vibrato frequency calculation ---
+    if len(peak_times) > 1:
+        peak_intervals = np.diff(peak_times)
+        avg_peak_interval = np.mean(peak_intervals)
+        vibrato_frequency = 1.0 / avg_peak_interval if avg_peak_interval > 0 else np.nan
+    else:
+        vibrato_frequency = np.nan
     return {
         "f0_yin": f0_yin,
         "f0_smooth": f0_smooth,
@@ -81,7 +88,8 @@ def analyze_f0_yin(
         "troughs_indices": troughs_indices,
         "midpoints": midpoints,
         "average_distance": average_distance,
-        "vibrato_center_numerical": np.nanmean(midpoints[:,1]) if midpoints.size > 0 else np.nan
+        "vibrato_center_numerical": np.nanmean(midpoints[:,1]) if midpoints.size > 0 else np.nan,
+        "vibrato_frequency": vibrato_frequency  # Hz
     }
 
 f0 = analyze_f0_yin(y, sr, plot=False)
@@ -91,6 +99,7 @@ average_cents = float(1200 * np.log2((441 + average_hz) / 441))
 vibrato_center_numerical = float(f0['vibrato_center_numerical'])
 physical_depth = float(f_string/(2*average_hz)*(math.sqrt(1+4*average_hz**2/vibrato_center_numerical**2)-1))
 physical_position = float(f_string/vibrato_center_numerical)
+vibrato_frequency = float(f0['vibrato_frequency']) if f0['vibrato_frequency'] is not None else np.nan
 
 fig, ax = plt.subplots(figsize=(12, 12))
 
@@ -122,7 +131,8 @@ data = {
     'Tonal Center of Vibrato (Hz)': [vibrato_center_numerical],
     'Physical Depth of Vibrato': [physical_depth],
     'Physical Center of Vibrato': [physical_position],
-    'String Frequency': [f_string]
+    'String Frequency': [f_string],
+    'Vibrato Frequency (Hz)': [vibrato_frequency]  # Add vibrato frequency to CSV
 }
 
 df = pd.DataFrame(data)
@@ -132,7 +142,8 @@ numeric_cols = [
     'Tonal Center of Vibrato (Hz)',
     'Physical Depth of Vibrato',
     'Physical Center of Vibrato',
-    'String Frequency'
+    'String Frequency',
+    'Vibrato Frequency (Hz)'
 ]
 for col in numeric_cols:
     df[col] = pd.to_numeric(df[col], errors='coerce')
